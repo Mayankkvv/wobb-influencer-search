@@ -3,13 +3,24 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import type { FullUserProfile, ProfileDetailResponse } from "@/types";
-import { formatEngagementRate } from "@/utils/formatters";
+import { formatEngagementRate, formatFollowers } from "@/utils/formatters";
 import { loadProfileByUsername } from "@/utils/profileLoader";
+import { useListStore } from "@/store/useListStore";
 
-function formatFollowersDetail(count: number) {
-  if (count >= 1000000) return (count / 1000000).toFixed(2) + "M";
-  if (count >= 1000) return (count / 1000).toFixed(1) + "K";
-  return String(count);
+const ENGAGEMENT_BENCHMARK = 0.06;
+
+interface StatBoxProps {
+  label: string;
+  value: string;
+}
+
+function StatBox({ label, value }: StatBoxProps) {
+  return (
+    <div className="bg-white border border-line rounded-xl p-4">
+      <div className="text-xs text-slate mb-1">{label}</div>
+      <div className="font-mono font-semibold text-ink text-lg">{value}</div>
+    </div>
+  );
 }
 
 export function ProfileDetailPage() {
@@ -20,6 +31,12 @@ export function ProfileDetailPage() {
     null
   );
   const [loaded, setLoaded] = useState(false);
+
+  const addProfile = useListStore((state) => state.addProfile);
+  const removeProfile = useListStore((state) => state.removeProfile);
+  const isSelected = useListStore((state) =>
+    state.isProfileSelected(profileData?.data.user_profile.user_id ?? "")
+  );
 
   useEffect(() => {
     if (!username) return;
@@ -42,7 +59,7 @@ export function ProfileDetailPage() {
   if (!loaded) {
     return (
       <Layout title={`@${username}`}>
-        <p className="text-gray-400">Loading...</p>
+        <p className="text-slate">Loading...</p>
       </Layout>
     );
   }
@@ -53,7 +70,7 @@ export function ProfileDetailPage() {
         <p className="text-red-600 mb-4">
           Could not load profile details for {username}
         </p>
-        <Link to="/" className="text-blue-600 underline">
+        <Link to="/" className="text-teal underline">
           Back to search
         </Link>
       </Layout>
@@ -61,102 +78,110 @@ export function ProfileDetailPage() {
   }
 
   const user: FullUserProfile = profileData.data.user_profile;
+  const engagementRate = user.engagement_rate ?? 0;
+  const barWidth = Math.min((engagementRate / ENGAGEMENT_BENCHMARK) * 100, 100);
+
+  const handleListButtonClick = () => {
+    if (isSelected) {
+      removeProfile(user.user_id);
+    } else {
+      addProfile(user);
+    }
+  };
 
   return (
-    <Layout title={user.fullname}>
-      <Link to="/" className="text-sm text-blue-600 mb-4 inline-block">
+    <Layout>
+      <Link
+        to="/"
+        className="text-sm text-teal mb-6 inline-flex items-center gap-1"
+      >
         ← Back to search
       </Link>
 
-      <div className="flex gap-6 items-start text-left max-w-2xl mx-auto">
-        <img
-          src={user.picture}
-          className="w-24 h-24 rounded-full border"
-        />
-        <div className="flex-1">
-          <h2 className="text-xl font-bold">
-            @{user.username}
-            <VerifiedBadge verified={user.is_verified} />
-          </h2>
-          <p className="text-gray-600">{user.fullname}</p>
-          <p className="text-xs text-gray-400 mt-1">Platform: {platform}</p>
-
-          {user.description && (
-            <p className="mt-3 text-sm text-gray-700">{user.description}</p>
-          )}
-
-          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-            <div className="border p-2 rounded">
-              <div className="text-gray-500">Followers</div>
-              <div className="font-semibold">
-                {formatFollowersDetail(user.followers)}
-              </div>
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white border border-line rounded-xl p-6 mb-4">
+          <div className="flex items-start gap-4">
+            <img
+              src={user.picture}
+              alt={`${user.fullname} profile picture`}
+              className="w-20 h-20 rounded-full border border-line object-cover"
+            />
+            <div className="flex-1 min-w-0">
+              <h2 className="font-display text-xl font-semibold text-ink flex items-center gap-1">
+                @{user.username}
+                <VerifiedBadge verified={user.is_verified} />
+              </h2>
+              <p className="text-slate">{user.fullname}</p>
+              <p className="text-xs text-slate/70 mt-1 capitalize">
+                {platform}
+              </p>
             </div>
-            <div className="border p-2 rounded">
-              <div className="text-gray-500">Engagement Rate</div>
-              <div className="font-semibold">
-                {user.engagement_rate !== undefined
-                  ? (user.engagement_rate * 10000).toFixed(2) + "%"
-                  : "N/A"}
-              </div>
-            </div>
-            {user.posts_count !== undefined && (
-              <div className="border p-2 rounded">
-                <div className="text-gray-500">Posts</div>
-                <div className="font-semibold">{user.posts_count}</div>
-              </div>
-            )}
-            {user.avg_likes !== undefined && (
-              <div className="border p-2 rounded">
-                <div className="text-gray-500">Avg Likes</div>
-                <div className="font-semibold">
-                  {formatFollowersDetail(user.avg_likes)}
-                </div>
-              </div>
-            )}
-            {user.avg_comments !== undefined && (
-              <div className="border p-2 rounded">
-                <div className="text-gray-500">Avg Comments</div>
-                <div className="font-semibold">{user.avg_comments}</div>
-              </div>
-            )}
-            {user.avg_views !== undefined && user.avg_views > 0 && (
-              <div className="border p-2 rounded">
-                <div className="text-gray-500">Avg Views</div>
-                <div className="font-semibold">
-                  {formatFollowersDetail(user.avg_views)}
-                </div>
-              </div>
-            )}
-            {user.engagements !== undefined && (
-              <div className="border p-2 rounded">
-                <div className="text-gray-500">Engagements</div>
-                <div className="font-semibold">
-                  {formatEngagementRate(user.engagement_rate)}
-                </div>
-              </div>
-            )}
           </div>
 
+          {user.description && (
+            <p className="mt-4 text-sm text-ink/80 leading-relaxed">
+              {user.description}
+            </p>
+          )}
+
           {user.url && (
-            <a
-              href={user.url}
+            
+              <a href={user.url}
               target="_blank"
-              className="inline-block mt-4 text-blue-600 text-sm"
+              rel="noopener noreferrer"
+              className="inline-block mt-4 text-sm text-teal font-medium"
             >
               View on platform →
             </a>
           )}
-
-          {/* TODO: candidates must implement Add to List feature */}
-          {/* TODO: candidates must implement Add to List feature */}
-          <button
-            disabled
-            className="block mt-4 px-4 py-2 bg-gray-300 text-gray-500 rounded cursor-not-allowed"
-          >
-            Add to List
-          </button>
         </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <StatBox label="Followers" value={formatFollowers(user.followers)} />
+
+          <div className="bg-white border border-line rounded-xl p-4">
+            <div className="text-xs text-slate mb-1">Engagement Rate</div>
+            <div className="font-mono font-semibold text-ink text-lg">
+              {formatEngagementRate(user.engagement_rate)}
+            </div>
+            <div className="w-full h-1.5 bg-line rounded-full mt-2 overflow-hidden">
+              <div
+                className="h-full bg-teal rounded-full"
+                style={{ width: `${barWidth}%` }}
+              />
+            </div>
+          </div>
+
+          {user.posts_count !== undefined && (
+            <StatBox label="Posts" value={String(user.posts_count)} />
+          )}
+          {user.avg_likes !== undefined && (
+            <StatBox label="Avg Likes" value={formatFollowers(user.avg_likes)} />
+          )}
+          {user.avg_comments !== undefined && (
+            <StatBox label="Avg Comments" value={String(user.avg_comments)} />
+          )}
+          {user.avg_views !== undefined && user.avg_views > 0 && (
+            <StatBox label="Avg Views" value={formatFollowers(user.avg_views)} />
+          )}
+          {user.engagements !== undefined && (
+            <StatBox
+              label="Engagements"
+              value={formatFollowers(user.engagements)}
+            />
+          )}
+        </div>
+
+        <button
+          onClick={handleListButtonClick}
+          className={`w-full py-3 rounded-lg font-medium transition-colors ${
+            isSelected
+              ? "bg-amber-light text-amber"
+              : "bg-ink text-paper hover:bg-ink/90"
+          }`}
+        >
+          {isSelected ? "✓ In Shortlist — tap to remove" : "Add to List"}
+        </button>
       </div>
     </Layout>
   );
